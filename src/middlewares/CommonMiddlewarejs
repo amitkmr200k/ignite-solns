@@ -1,0 +1,27 @@
+const { validationResult } = require("express-validator");
+
+const validateSchema = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(422).json({ messgage: "Validation Error", errors: errors.array() });
+  }
+
+  next();
+};
+
+const notFound = (req, res, next) => {
+  const error = new Error("API Not found");
+  error.status = 404;
+
+  next(error);
+};
+
+const handleError = (error, req, res, next) => {
+  res.status(error.status || 500);
+
+  res.json({
+    message: error.message,
+  });
+};
+
+module.exports = { validateSchema, notFound, handleError };

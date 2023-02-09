@@ -1,10 +1,53 @@
 const async = require("async");
 
-const { getBooks, getTotalBooksCount, getAuthors,
+const {
+  getBooks,
+  getTotalBooksCount,
+  getAuthors,
   getShelfs,
   getSubjects,
   getLanguages,
-  getLinks, } = require("../services/BookService");
+  getLinks,
+} = require("../services/BookService");
+const { paginationResponseData, strToArr } = require("../services/HelperService");
+
+const getAllBooks = async (req, res) => {
+  try {
+    const { pagination, filters } = getPaginationAndFilters(req.query);
+
+    const totalCount = await getTotalBooksCount(filters);
+
+    let data = [];
+
+    if (totalCount) {
+      data = await getBooks(pagination, filters);
+    }
+
+    await async.forEachOfLimit(data, 2, async (book) => {
+      book.authors = await getAuthors(book.book_id, book.authors);
+      book.shelfs = await getShelfs(book.book_id, book.shelfs);
+      book.subjects = await getSubjects(book.book_id, book.subjects);
+      book.languages = await getLanguages(book.book_id, book.languages);
+      book.links = await getLinks(book.book_id, book.links);
+
+      delete book.book_id;
+    });
+
+    res.status(200).json({
+      message: "Books list fecthed successfully.",
+      totalCount,
+      dataCount: data.length,
+      data,
+      pagination: paginationResponseData(totalCount, pagination),
+    });
+  } catch (error) {
+    console.log("🚀 ~ file: BookController.js:87 ~ getAllBooks ~ error", error);
+
+    res.status(500).json({
+      message: `Internal Sever Error: ${error.message}`,
+    });
+  }
+};
 
 const getPaginationAndFilters = (query) => {
   let { page } = query;
@@ -16,68 +59,17 @@ const getPaginationAndFilters = (query) => {
     pagination: {
       page,
       limit,
-      offset: limit * (page - 1)
+      offset: limit * (page - 1),
     },
     filters: {
-      bookId: strToArr(query.bookId),
+      bookId: strToArr(query.book_id),
       language: strToArr(query.language),
       mimeType: strToArr(query.mimeType),
       topic: strToArr(query.topic),
       author: strToArr(query.author),
       title: strToArr(query.title),
     },
-  }
-}
-
-const paginationResponseData = (totalCount, pagination) => {
-  const {limit, page } = pagination;
-
-  const totalPages = Math.ceil(totalCount/limit);
-  const currentPage = page;
-  const nextPage = (currentPage + 1) > totalPages ? null : (currentPage + 1);
-
-  return {
-    currentPage,
-    nextPage: nextPage,
-    perPageLimit: limit,
-    totalPages
   };
-} 
-
-const strToArr = (str, separator = ",") => {
-  if (!str) {
-    return [];
-  }
-
-  return str.split(separator).map(val => val.trim());
-}
-
-const getAllBooks = async (req, res) => {
-  const {pagination, filters} = getPaginationAndFilters(req.query);
-
-  const totalCount = await getTotalBooksCount(filters);
-
-  let data = [];
-
-  if (totalCount) {
-    data = await getBooks(pagination, filters);
-  }
-
-  await async.forEachOfLimit(data, 2, async (book) => {
-    book.authors = await getAuthors(book.book_id, book.authors);
-    book.shelfs = await getShelfs(book.book_id, book.shelfs);
-    book.subjects = await getSubjects(book.book_id, book.subjects);
-    book.languages = await getLanguages(book.book_id, book.languages);
-    book.links = await getLinks(book.book_id, book.links);
-  });
-
-  res.status(200).json({
-    totalCount,
-    dataCount: data.length,
-    data,
-    pagination : paginationResponseData(totalCount, pagination),
-    message: "Books list",
-  });
-}
+};
 
 module.exports = { getAllBooks };
